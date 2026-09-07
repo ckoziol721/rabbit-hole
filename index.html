@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rabbit Hole</title>
+
+<style>
+body {
+  margin: 0;
+  background: #090b0f;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  max-width: 700px;
+  margin: auto;
+  padding: 35px 18px;
+}
+
+h1 {
+  font-size: 42px;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  color: #999;
+  margin-bottom: 25px;
+}
+
+.search {
+  display: flex;
+  gap: 8px;
+}
+
+input {
+  flex: 1;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid #333;
+  background: #15181d;
+  color: white;
+  font-size: 16px;
+}
+
+button {
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 17px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.dive {
+  background: white;
+  color: black;
+}
+
+.card {
+  margin-top: 25px;
+  padding: 23px;
+  background: #12151a;
+  border: 1px solid #30343b;
+  border-radius: 22px;
+}
+
+.topic {
+  font-size: 30px;
+  font-weight: bold;
+  margin: 8px 0 15px;
+}
+
+.description {
+  color: #ccc;
+  line-height: 1.6;
+}
+
+.choice {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  background: #1b1f26;
+  color: white;
+  text-align: left;
+}
+
+.status {
+  color: #999;
+  margin-top: 15px;
+}
+
+.path {
+  margin-top: 20px;
+  color: #888;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🕳️ Rabbit Hole</h1>
+
+<div class="subtitle">
+Start anywhere. See where you end up.
+</div>
+
+<div class="search">
+<input id="search" placeholder="Try Titanic, pyramids, J.P. Morgan...">
+<button class="dive" onclick="start()">Dive In</button>
+</div>
+
+<div id="status" class="status"></div>
+
+<div id="card" class="card" style="display:none;"></div>
+
+<div id="path" class="path"></div>
+
+</div>
+
+<script>
+
+let current = "";
+let history = [];
+
+async function start() {
+
+  let query = document.getElementById("search").value.trim();
+
+  if (!query) {
+    document.getElementById("status").innerText =
+      "Enter a topic first.";
+    return;
+  }
+
+  history = [];
+
+  document.getElementById("status").innerText =
+    "Opening the rabbit hole...";
+
+  try {
+
+    let searchURL =
+      "https://en.wikipedia.org/w/api.php" +
+      "?action=query" +
+      "&list=search" +
+      "&srsearch=" + encodeURIComponent(query) +
+      "&srlimit=1" +
+      "&format=json" +
+      "&origin=*";
+
+    let response = await fetch(searchURL);
+
+    let data = await response.json();
+
+    if (!data.query.search.length) {
+      throw new Error("Topic not found.");
+    }
+
+    let title = data.query.search[0].title;
+
+    dive(title);
+
+  } catch (error) {
+
+    document.getElementById("status").innerText =
+      "Couldn't connect. Try again.";
+
+  }
+}
+
+
+async function dive(title) {
+
+  current = title;
+
+  history.push(title);
+
+  document.getElementById("status").innerText =
+    "Finding your next tunnel...";
+
+  try {
+
+    let pageURL =
+      "https://en.wikipedia.org/w/api.php" +
+      "?action=query" +
+      "&prop=extracts|info" +
+      "&exintro=1" +
+      "&explaintext=1" +
+      "&inprop=url" +
+      "&redirects=1" +
+      "&titles=" + encodeURIComponent(title) +
+      "&format=json" +
+      "&origin=*";
+
+    let pageResponse = await fetch(pageURL);
+
+    let pageData = await pageResponse.json();
+
+    let page =
+      Object.values(pageData.query.pages)[0];
+
+    let linksURL =
+      "https://en.wikipedia.org/w/api.php" +
+      "?action=query" +
+      "&prop=links" +
+      "&plnamespace=0" +
+      "&pllimit=30" +
+      "&titles=" + encodeURIComponent(title) +
+      "&format=json" +
+      "&origin=*";
+
+    let linksResponse = await fetch(linksURL);
+
+    let linksData = await linksResponse.json();
+
+    let linkPage =
+      Object.values(linksData.query.pages)[0];
+
+    let links = (linkPage.links || [])
+      .map(x => x.title)
+      .filter(x =>
+        !x.includes(":") &&
+        x !== current &&
+        !history.includes(x)
+      );
+
+    links.sort(() => Math.random() - 0.5);
+
+    let choices = links.slice(0, 5);
+
+    let html = "";
+
+    html += "<div style='color:#888;font-size:12px'>YOU ARE HERE</div>";
+
+    html += "<div class='topic'>" +
+      escapeHTML(page.title) +
+      "</div>";
+
+    html += "<div class='description'>" +
+      escapeHTML((page.extract || "No summary available.").slice(0,900)) +
+      "</div>";
+
+    html += "<div style='margin-top:20px'>";
+
+    choices.forEach(choice => {
+
+      html +=
+        "<button class='choice' " +
+        "onclick='dive(" +
+        JSON.stringify(choice) +
+        ")'>" +
+        "→ " + escapeHTML(choice) +
+        "</button>";
+
+    });
+
+    html += "</div>";
+
+    document.getElementById("card").innerHTML = html;
+
+    document.getElementById("card").style.display =
+      "block";
+
+    document.getElementById("status").innerText =
+      "Choose your next tunnel.";
+
+    document.getElementById("path").innerText =
+      history.join("  →  ");
+
+  } catch (error) {
+
+    document.getElementById("status").innerText =
+      "Something went wrong.";
+
+  }
+}
+
+
+function escapeHTML(text) {
+
+  return text
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+
+}
+
+</script>
+
+</body>
+</html>
